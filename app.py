@@ -19,7 +19,6 @@ flask_app = Flask(__name__)
 def health_check():
     return Response("OK", status=200)
 
-
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client["channel_manager"]
@@ -27,6 +26,7 @@ users_collection = db["users"]
 channels_collection = db["channels"]
 invites_collection = db["invites"]  # Collection for invite links
 forwarded_messages_collection = db["forwarded_messages"]  # Collection for forwarded messages
+processed_messages_collection = db["processed_messages"]  # Collection to track processed messages
 
 # Initialize Pyrogram client
 app = Client(
@@ -39,9 +39,24 @@ app = Client(
 # Admin ID
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
+# Function to check if a message has already been processed
+async def is_message_processed(message_id):
+    return processed_messages_collection.find_one({"message_id": message_id})
+
+# Function to mark a message as processed
+async def mark_message_processed(message_id):
+    processed_messages_collection.insert_one({"message_id": message_id, "timestamp": datetime.now()})
+
 # Command to start the bot
 @app.on_message(filters.command("start") & filters.private)
 async def start(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     user_id = message.from_user.id
     user_name = message.from_user.first_name
 
@@ -60,6 +75,13 @@ async def start(client: Client, message: Message):
 # Callback query handler
 @app.on_callback_query()
 async def callback_query_handler(client: Client, callback_query: CallbackQuery):
+    # Check if the callback query has already been processed
+    if await is_message_processed(callback_query.id):
+        return
+
+    # Mark the callback query as processed
+    await mark_message_processed(callback_query.id)
+
     # Extract the user_id from the callback data
     data = callback_query.data
     user_id = int(data.split("_")[1])
@@ -134,6 +156,13 @@ async def revoke_expired_invites():
 # Command to add a channel
 @app.on_message(filters.command("addchannel") & filters.user(ADMIN_ID))
 async def add_channel(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     if message.reply_to_message and message.reply_to_message.forward_from_chat:
         channel_id = message.reply_to_message.forward_from_chat.id
         channel_name = message.reply_to_message.forward_from_chat.title
@@ -150,6 +179,13 @@ async def add_channel(client: Client, message: Message):
 # Command to remove a channel
 @app.on_message(filters.command("removechannel") & filters.user(ADMIN_ID))
 async def remove_channel(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     if message.reply_to_message and message.reply_to_message.forward_from_chat:
         channel_id = message.reply_to_message.forward_from_chat.id
 
@@ -165,6 +201,13 @@ async def remove_channel(client: Client, message: Message):
 # Command to list all channels
 @app.on_message(filters.command("listchannels") & filters.user(ADMIN_ID))
 async def list_channels(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     channels = channels_collection.find()
     if channels:
         channel_list = "\n".join([f"{channel['channel_name']} (ID: {channel['channel_id']})" for channel in channels])
@@ -175,6 +218,13 @@ async def list_channels(client: Client, message: Message):
 # Command to set removal date for a user based on number of days
 @app.on_message(filters.command("setremoval") & filters.user(ADMIN_ID))
 async def set_removal(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     if len(message.command) > 2:
         user_id = int(message.command[1])
         days = int(message.command[2])
@@ -254,6 +304,13 @@ async def check_and_remove_users():
 # Command to broadcast a message to all users
 @app.on_message(filters.command("broadcast") & filters.user(ADMIN_ID))
 async def broadcast(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     if message.reply_to_message:
         users = users_collection.find()
         for user in users:
@@ -271,6 +328,13 @@ async def broadcast(client: Client, message: Message):
 @app.on_message(filters.private & ~filters.command("start"))
 async def forward_user_message(client: Client, message: Message):
     if message.from_user.id != ADMIN_ID:
+        # Check if the message has already been processed
+        if await is_message_processed(message.id):
+            return
+
+        # Mark the message as processed
+        await mark_message_processed(message.id)
+
         # Forward the message to the admin
         forwarded_message = await message.forward(ADMIN_ID)
         # Store the user ID with the forwarded message ID in the database
@@ -283,6 +347,13 @@ async def forward_user_message(client: Client, message: Message):
 # Handle admin replies to user messages
 @app.on_message(filters.private & filters.user(ADMIN_ID) & filters.reply)
 async def admin_reply(client: Client, message: Message):
+    # Check if the message has already been processed
+    if await is_message_processed(message.id):
+        return
+
+    # Mark the message as processed
+    await mark_message_processed(message.id)
+
     # Get the forwarded message ID from the reply
     forwarded_message_id = message.reply_to_message.id
     print(f"Admin replied to message ID: {forwarded_message_id}")  # Debug log
@@ -306,6 +377,14 @@ async def admin_reply(client: Client, message: Message):
         print(f"No forwarded message found for ID: {forwarded_message_id}")  # Debug log
         await message.reply("Please reply to a forwarded message to reply to the user.")
 
+# Function to clean up processed messages older than 24 hours
+async def cleanup_processed_messages():
+    while True:
+        now = datetime.now()
+        # Delete processed messages older than 24 hours
+        processed_messages_collection.delete_many({"timestamp": {"$lte": now - timedelta(hours=24)}})
+        await asyncio.sleep(3600)  # Run every hour
+
 # Run the bot and Flask server
 if __name__ == "__main__":
     # Start the Flask server in a separate thread
@@ -321,6 +400,7 @@ if __name__ == "__main__":
     loop = asyncio.get_event_loop()
     loop.create_task(check_and_remove_users())
     loop.create_task(revoke_expired_invites())
+    loop.create_task(cleanup_processed_messages())  # Add this line
 
     # Keep the bot running
     try:
