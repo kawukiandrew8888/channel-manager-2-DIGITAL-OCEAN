@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
 from pyrogram.errors import UserIsBlocked
+from pyrogram.errors import FloodWait
 from pymongo import MongoClient
 from flask import Flask, Response
 
@@ -305,14 +306,35 @@ async def admin_reply(client: Client, message: Message):
         print(f"No forwarded message found for ID: {forwarded_message_id}")  # Debug log
         await message.reply("Please reply to a forwarded message to reply to the user.")
 
+
+
 # Run the bot and Flask server
 if __name__ == "__main__":
-    # Start the Pyrogram client
-    app.start()
+    try:
+        # Start the Pyrogram client
+        app.start()
 
-    # Start background tasks after the client is initialized
-    loop = asyncio.get_event_loop()
-    loop.create_task(check_and_remove_users())
-    loop.create_task(revoke_expired_invites())
+        # Start background tasks after the client is initialized
+        loop = asyncio.get_event_loop()
+        loop.create_task(check_and_remove_users())
+        loop.create_task(revoke_expired_invites())
+
+        # Run the Flask server in a separate thread
+        from threading import Thread
+        flask_thread = Thread(target=lambda: flask_app.run(host='0.0.0.0', port=8000))
+        flask_thread.daemon = True
+        flask_thread.start()
+
+        # Keep the bot running
+        loop.run_forever()
+    except FloodWait as e:
+        print(f"FloodWait error: Waiting for {e.x} seconds before retrying...")
+        asyncio.sleep(e.x)  # Wait for the specified time
+        app.start()  # Retry starting the bot
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # Stop the Pyrogram client
+        app.stop()
 
     # Run the Flask server in a separate thread
