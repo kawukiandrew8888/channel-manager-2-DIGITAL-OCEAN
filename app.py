@@ -56,7 +56,17 @@ async def start(client: Client, message: Message):
 
     await message.reply("𝐘𝐨𝐮𝐫 𝐫𝐞𝐪𝐮𝐞𝐬𝐭 𝐡𝐚𝐬 𝐛𝐞𝐞𝐧 𝐬𝐞𝐧𝐭 𝐭𝐨 𝐋-𝐅𝐋𝐈𝐗 𝐀𝐃𝐌𝐈𝐍, 𝐚𝐧𝐝 𝐩𝐥𝐞𝐚𝐬𝐞 𝐰𝐚𝐢𝐭 𝐟𝐨𝐫 𝐚𝐩𝐩𝐫𝐨𝐯𝐚𝐥.\n\n 𝐓𝐡𝐚𝐧𝐤 𝐲𝐨𝐮 🤝🤝")
 
-# (Rest of your existing code remains unchanged)
+# Placeholder function for checking and removing users
+async def check_and_remove_users():
+    while True:
+        await asyncio.sleep(60)  # Check every 60 seconds
+        print("Checking and removing users...")  # Replace with actual logic
+
+# Placeholder function for revoking expired invites
+async def revoke_expired_invites():
+    while True:
+        await asyncio.sleep(60)  # Check every 60 seconds
+        print("Revoking expired invites...")  # Replace with actual logic
 
 # Run the bot and Flask server
 if __name__ == "__main__":
@@ -65,17 +75,4 @@ if __name__ == "__main__":
 
     # Start background tasks after the client is initialized
     loop = asyncio.get_event_loop()
-    loop.create_task(check_and_remove_users())
-    loop.create_task(revoke_expired_invites())
-
-    # Start Flask server
-    flask_app.run(host='0.0.0.0', port=8000)  # Run Flask on TCP port 8000
-
-    # Keep the bot running
-    try:
-        loop.run_forever()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        # Stop the Pyrogram client
-        app.stop()
+    loop.create_task
