@@ -12,14 +12,6 @@ from flask import Flask, Response
 # Load environment variables
 load_dotenv()
 
-# Initialize Flask app
-flask_app = Flask(__name__)
-
-# Health check route
-@flask_app.route('/health')
-def health_check():
-    return Response(status=200)
-
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client["channel_manager"]
