@@ -10,6 +10,15 @@ from pymongo import MongoClient
 # Load environment variables
 load_dotenv()
 
+# Initialize Flask app
+flask_app = Flask(__name__)
+
+# Health check endpoint
+@flask_app.route('/health')
+def health_check():
+    return Response("OK", status=200)
+
+
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client["channel_manager"]
