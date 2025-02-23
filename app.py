@@ -6,9 +6,18 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
 from pyrogram.errors import UserIsBlocked, FloodWait
 from pymongo import MongoClient
+from flask import Flask, Response
 
 # Load environment variables
 load_dotenv()
+
+# Initialize Flask app
+flask_app = Flask(__name__)
+
+# Health check endpoint
+@flask_app.route('/health')
+def health_check():
+    return Response("OK", status=200)
 
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv("MONGO_URI"))
@@ -419,8 +428,14 @@ async def admin_reply(client: Client, message: Message):
         except Exception as e:
             print(f"Error sending message: {e}")
 
-# Run the bot
+# Run the bot and Flask server
 if __name__ == "__main__":
+    # Start the Flask server in a separate thread
+    from threading import Thread
+    flask_thread = Thread(target=lambda: flask_app.run(host='0.0.0.0', port=8000))
+    flask_thread.daemon = True
+    flask_thread.start()
+
     # Start the Pyrogram client
     app.start()
 
