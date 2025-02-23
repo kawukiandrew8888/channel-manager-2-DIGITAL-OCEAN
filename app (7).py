@@ -305,8 +305,14 @@ async def admin_reply(client: Client, message: Message):
         print(f"No forwarded message found for ID: {forwarded_message_id}")  # Debug log
         await message.reply("Please reply to a forwarded message to reply to the user.")
 
-# Run the bot
+# Run the bot and Flask server
 if __name__ == "__main__":
+    # Start the Flask server in a separate thread
+    from threading import Thread
+    flask_thread = Thread(target=lambda: flask_app.run(host='0.0.0.0', port=8000))
+    flask_thread.daemon = True
+    flask_thread.start()
+
     # Start the Pyrogram client
     app.start()
 
