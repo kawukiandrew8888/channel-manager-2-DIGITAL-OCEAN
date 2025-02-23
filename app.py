@@ -52,7 +52,7 @@ async def start(client: Client, message: Message):
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("Accept User", callback_data=f"accept_{user_id}")],
                 [InlineKeyboardButton("Reject User", callback_data=f"reject_{user_id}")]
-            )
+            )]
         )
     except FloodWait as e:
         await asyncio.sleep(e.value)  # Wait for the specified duration
