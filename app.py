@@ -19,14 +19,20 @@ flask_app = Flask(__name__)
 def health_check():
     return Response("OK", status=200)
 
-
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv("MONGO_URI"))
 db = mongo_client["channel_manager"]
 users_collection = db["users"]
 channels_collection = db["channels"]
-invites_collection = db["invites"]  # Collection for invite links
-forwarded_messages_collection = db["forwarded_messages"]  # Collection for forwarded messages
+invites_collection = db["invites"]
+forwarded_messages_collection = db["forwarded_messages"]
+processed_messages_collection = db["processed_messages"]
+
+# Create TTL index for auto-cleaning processed messages (7 days retention)
+processed_messages_collection.create_index(
+    "created_at",
+    expireAfterSeconds=604800  # 7 days in seconds
+)
 
 # Initialize Pyrogram client
 app = Client(
@@ -67,10 +73,10 @@ async def callback_query_handler(client: Client, callback_query: CallbackQuery):
     # Fetch the user's details using the user_id
     try:
         user = await client.get_users(user_id)
-        user_name = user.first_name  # Get the user's first name
+        user_name = user.first_name
     except Exception as e:
         print(f"Error fetching user details: {e}")
-        user_name = "Unknown User"  # Fallback in case of an error
+        user_name = "Unknown User"
 
     # Delete the previous message sent to the admin
     await callback_query.message.delete()
@@ -86,7 +92,7 @@ async def callback_query_handler(client: Client, callback_query: CallbackQuery):
             invites_collection.insert_one({
                 "invite_link": invite_link.invite_link,
                 "channel_id": channel["channel_id"],
-                "user_id": user_id,  # Store the user ID
+                "user_id": user_id,
                 "created_at": datetime.now()
             })
 
@@ -96,7 +102,6 @@ async def callback_query_handler(client: Client, callback_query: CallbackQuery):
         ])
         try:
             await client.send_message(user_id, "🟢 𝕮𝖔𝖓𝖌𝖗𝖆𝖙𝖚𝖑𝖆𝖙𝖎𝖔𝖓𝖘\n\n 𝐘𝐨𝐮𝐫 𝐫𝐞𝐪𝐮𝐞𝐬𝐭 𝐡𝐚𝐬 𝐛𝐞𝐞𝐧 𝐚𝐜𝐜𝐞𝐩𝐭𝐞𝐝 𝐚𝐧𝐝 𝐡𝐞𝐫𝐞 𝐚𝐫𝐞 𝐭𝐡𝐞 𝐢𝐧𝐯𝐢𝐭𝐞 𝐥𝐢𝐧𝐤𝐬 👇👇👇:", reply_markup=keyboard)
-            # Send confirmation to admin
             await client.send_message(ADMIN_ID, f"User `{user_id}` with Name: `{user_name}` has received the acceptance message.")
         except UserIsBlocked:
             await client.send_message(ADMIN_ID, f"User `{user_id}` with Name: `{user_name}` has blocked the bot. Cannot send invite links.")
@@ -108,7 +113,6 @@ async def callback_query_handler(client: Client, callback_query: CallbackQuery):
         ])
         try:
             await client.send_message(user_id, "⚠️ 𝐒𝐨𝐫𝐫𝐲 ❗️❗️ 😞😞 𝐘𝐨𝐮𝐫 𝐫𝐞𝐪𝐮𝐞𝐬𝐭 𝐡𝐚𝐬 𝐛𝐞𝐞𝐧 𝐫𝐞𝐣𝐞𝐜𝐭𝐞𝐝.\n\n ✅ 𝐘𝐨𝐮 𝐧𝐞𝐞𝐝 𝐭𝐨 𝐩𝐚𝐲 𝐲𝐨𝐮𝐫 𝐦𝐨𝐧𝐭𝐡𝐥𝐲 𝐬𝐮𝐛𝐬𝐜𝐫𝐢𝐩𝐭𝐢𝐨𝐧 𝐨𝐟 𝟓𝟎𝟎𝟎𝐔𝐆𝐗 𝐢𝐧 𝐨𝐫𝐝𝐞𝐫 𝐭𝐨 𝐠𝐞𝐭 𝐢𝐧𝐯𝐢𝐭𝐞𝐥𝐢𝐧𝐤𝐬\n\n ✅ 𝐏𝐀𝐘𝐌𝐄𝐍𝐓 : 𝟎𝟕𝟎𝟒𝟑𝟏𝟐𝟗𝟓𝟏(𝐀𝐧𝐝𝐫𝐞𝐰 𝐊𝐚𝐰𝐮𝐤𝐢)\n\n✅ 𝐒𝐞𝐧𝐝 𝐩𝐚𝐲𝐦𝐞𝐧𝐭 𝐯𝐞𝐫𝐢𝐟𝐢𝐜𝐚𝐭𝐢𝐨𝐧 𝐡𝐞𝐫𝐞 👇:", reply_markup=keyboard1)
-            # Send confirmation to admin
             await client.send_message(ADMIN_ID, f"User `{user_id}` with Name: `{user_name}` has received the rejection message.")
         except UserIsBlocked:
             await client.send_message(ADMIN_ID, f"User `{user_id}` with Name: `{user_name}` has blocked the bot. Cannot send rejection message.")
@@ -129,7 +133,7 @@ async def revoke_expired_invites():
             except Exception as e:
                 print(f"Failed to revoke invite link {invite['invite_link']}: {e}")
 
-        await asyncio.sleep(600)  # Check every 10 minutes
+        await asyncio.sleep(600)
 
 # Command to add a channel
 @app.on_message(filters.command("addchannel") & filters.user(ADMIN_ID))
@@ -138,7 +142,6 @@ async def add_channel(client: Client, message: Message):
         channel_id = message.reply_to_message.forward_from_chat.id
         channel_name = message.reply_to_message.forward_from_chat.title
 
-        # Check if channel already exists
         if channels_collection.find_one({"channel_id": channel_id}):
             await message.reply("Channel already added.")
         else:
@@ -153,7 +156,6 @@ async def remove_channel(client: Client, message: Message):
     if message.reply_to_message and message.reply_to_message.forward_from_chat:
         channel_id = message.reply_to_message.forward_from_chat.id
 
-        # Remove channel from database
         result = channels_collection.delete_one({"channel_id": channel_id})
         if result.deleted_count > 0:
             await message.reply("Channel removed successfully.")
@@ -172,7 +174,7 @@ async def list_channels(client: Client, message: Message):
     else:
         await message.reply("No channels added.")
 
-# Command to set removal date for a user based on number of days
+# Command to set removal date for a user
 @app.on_message(filters.command("setremoval") & filters.user(ADMIN_ID))
 async def set_removal(client: Client, message: Message):
     if len(message.command) > 2:
@@ -181,13 +183,10 @@ async def set_removal(client: Client, message: Message):
         removal_date = datetime.now() + timedelta(days=days)
         warn_date = removal_date - timedelta(days=1)
 
-        # Format the removal date to include both date and time
         removal_date_str = removal_date.strftime("%Y-%m-%d at %H:%M:%S")
 
-        # Update user's removal date
         users_collection.update_one({"user_id": user_id}, {"$set": {"removal_date": removal_date, "warn_date": warn_date}}, upsert=True)
 
-        # Notify user with the actual date and time of removal
         try:
             await client.send_message(user_id, f"You will be removed from the channel on {removal_date_str}.")
         except UserIsBlocked:
@@ -196,7 +195,9 @@ async def set_removal(client: Client, message: Message):
     else:
         await message.reply("Usage: /setremoval <user_id> <days>")
 
-# Function to check and remove users
+
+# Continuing from previous code...
+
 async def check_and_remove_users():
     while True:
         now = datetime.now()
@@ -221,21 +222,15 @@ async def check_and_remove_users():
 
             for channel in channels:
                 try:
-                    # Find all invite links associated with the user for this channel
+                    # Revoke invite links
                     invites = invites_collection.find({"channel_id": channel["channel_id"], "user_id": user_id})
                     for invite in invites:
-                        # Revoke the invite link before banning the user
                         await app.revoke_chat_invite_link(channel["channel_id"], invite["invite_link"])
                         invites_collection.delete_one({"_id": invite["_id"]})
-                        print(f"Revoked invite link for user {user_id} in channel {channel['channel_id']}: {invite['invite_link']}")
 
-                    # Ban the user
+                    # Ban and unban to remove from channel
                     await app.ban_chat_member(chat_id=channel["channel_id"], user_id=user_id)
-                    print(f"Banned user {user_id} from channel {channel['channel_id']}")
-
-                    # Unban the user to remove them from the banned list
                     await app.unban_chat_member(chat_id=channel["channel_id"], user_id=user_id)
-                    print(f"Unbanned user {user_id} from channel {channel['channel_id']}")
                 except Exception as e:
                     print(f"Failed to process user {user_id} in channel {channel['channel_id']}: {e}")
 
@@ -246,12 +241,12 @@ async def check_and_remove_users():
             except Exception as e:
                 print(f"Failed to send message to {user_id}: {e}")
 
-            # Delete the user from the users collection
+            # Delete user record
             users_collection.delete_one({"user_id": user_id})
 
-        await asyncio.sleep(60)  # Check every minute
+        await asyncio.sleep(60)
 
-# Command to broadcast a message to all users
+# Command to broadcast message to all users
 @app.on_message(filters.command("broadcast") & filters.user(ADMIN_ID))
 async def broadcast(client: Client, message: Message):
     if message.reply_to_message:
@@ -260,73 +255,74 @@ async def broadcast(client: Client, message: Message):
             try:
                 await message.reply_to_message.copy(user["user_id"])
             except UserIsBlocked:
-                continue  # Skip users who have blocked the bot
+                continue
             except Exception as e:
                 print(f"Failed to send broadcast to {user['user_id']}: {e}")
         await message.reply("Broadcast sent to all users.")
     else:
         await message.reply("Please reply to a message to broadcast it.")
 
-# Handle user messages and forward them to the admin
+# Handle user messages with duplication check
 @app.on_message(filters.private & ~filters.command("start"))
 async def forward_user_message(client: Client, message: Message):
     if message.from_user.id != ADMIN_ID:
-        # Forward the message to the admin
+        # Check for existing processed message
+        if processed_messages_collection.find_one({"message_id": message.id}):
+            return
+
+        # Forward to admin and store metadata
         forwarded_message = await message.forward(ADMIN_ID)
-        # Store the user ID with the forwarded message ID in the database
         forwarded_messages_collection.insert_one({
             "forwarded_message_id": forwarded_message.id,
             "user_id": message.from_user.id
         })
+
+        # Mark as processed with timestamp
+        processed_messages_collection.insert_one({
+            "message_id": message.id,
+            "created_at": datetime.now()
+        })
+
         await message.reply("𝒀𝒐𝒖𝒓 𝒎𝒆𝒔𝒔𝒂𝒈𝒆 𝒉𝒂𝒔 𝒃𝒆𝒆𝒏 𝒇𝒐𝒓𝒘𝒂𝒓𝒅𝒆𝒅 𝒕𝒐 𝒕𝒉𝒆 𝒂𝒅𝒎𝒊𝒏. 👍")
 
-# Handle admin replies to user messages
+# Handle admin replies to forwarded messages
 @app.on_message(filters.private & filters.user(ADMIN_ID) & filters.reply)
 async def admin_reply(client: Client, message: Message):
-    # Get the forwarded message ID from the reply
-    forwarded_message_id = message.reply_to_message.id
-    print(f"Admin replied to message ID: {forwarded_message_id}")  # Debug log
-
-    # Retrieve the user ID from the database
-    forwarded_message = forwarded_messages_collection.find_one({"forwarded_message_id": forwarded_message_id})
+    forwarded_message = forwarded_messages_collection.find_one(
+        {"forwarded_message_id": message.reply_to_message.id}
+    )
     
     if forwarded_message:
-        user_id = forwarded_message["user_id"]
-        print(f"Found user ID: {user_id} for forwarded message ID: {forwarded_message_id}")  # Debug log
-
         try:
-            # Send the admin's reply as a new message to the user
-            await client.send_message(user_id, message.text)
-            await message.reply("Your reply has been sent to the user.")
+            await client.send_message(
+                forwarded_message["user_id"],
+                message.text
+            )
+            await message.reply("Reply sent to user.")
         except UserIsBlocked:
-            await message.reply("The user has blocked the bot. Cannot send the reply.")
-        except Exception as e:
-            await message.reply(f"Failed to send the reply: {e}")
+            await message.reply("❌ User has blocked the bot.")
     else:
-        print(f"No forwarded message found for ID: {forwarded_message_id}")  # Debug log
-        await message.reply("Please reply to a forwarded message to reply to the user.")
+        await message.reply("⚠️ No linked user found for this message.")
 
-# Run the bot and Flask server
+# Server initialization
 if __name__ == "__main__":
-    # Start the Flask server in a separate thread
+    # Start Flask server in separate thread
     from threading import Thread
     flask_thread = Thread(target=lambda: flask_app.run(host='0.0.0.0', port=8000))
     flask_thread.daemon = True
     flask_thread.start()
 
-    # Start the Pyrogram client
+    # Start Pyrogram client
     app.start()
-
-    # Start background tasks after the client is initialized
+    
+    # Start background tasks
     loop = asyncio.get_event_loop()
     loop.create_task(check_and_remove_users())
     loop.create_task(revoke_expired_invites())
 
-    # Keep the bot running
     try:
         loop.run_forever()
     except KeyboardInterrupt:
         pass
     finally:
-        # Stop the Pyrogram client
         app.stop()
