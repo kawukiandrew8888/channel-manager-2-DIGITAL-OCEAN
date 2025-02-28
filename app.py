@@ -8,7 +8,7 @@ from pyrogram.errors import UserIsBlocked
 from pymongo import MongoClient
 from aiohttp import web
 
-# Load environment variables
+# Load environment variables....
 load_dotenv()
 
 # Initialize MongoDB client
