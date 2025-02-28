@@ -58,7 +58,7 @@ async def start(client: Client, message: Message):
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("Accept User", callback_data=f"accept_{user_id}")],
             [InlineKeyboardButton("Reject User", callback_data=f"reject_{user_id}")]
-        ])
+        )
     )
 
     await message.reply("𝐘𝐨𝐮𝐫 𝐫𝐞𝐪𝐮𝐞𝐬𝐭 𝐡𝐚𝐬 𝐛𝐞𝐞𝐧 𝐬𝐞𝐧𝐭 𝐭𝐨 𝐋-𝐅𝐋𝐈𝐗 𝐀𝐃𝐌𝐈𝐍, 𝐚𝐧𝐝 𝐩𝐥𝐞𝐚𝐬𝐞 𝐰𝐚𝐢𝐭 𝐟𝐨𝐫 𝐚𝐩𝐩𝐫𝐨𝐯𝐚𝐥.\n\n 𝐓𝐡𝐚𝐧𝐤 𝐲𝐨𝐮 🤝🤝")
@@ -195,9 +195,7 @@ async def set_removal(client: Client, message: Message):
     else:
         await message.reply("Usage: /setremoval <user_id> <days>")
 
-
-# Continuing from previous code...
-
+# Function to check and remove users
 async def check_and_remove_users():
     while True:
         now = datetime.now()
@@ -268,6 +266,7 @@ async def forward_user_message(client: Client, message: Message):
     if message.from_user.id != ADMIN_ID:
         # Check for existing processed message
         if processed_messages_collection.find_one({"message_id": message.id}):
+            print(f"Message {message.id} already processed.")
             return
 
         # Forward to admin and store metadata
@@ -282,6 +281,7 @@ async def forward_user_message(client: Client, message: Message):
             "message_id": message.id,
             "created_at": datetime.now()
         })
+        print(f"Message {message.id} processed and forwarded.")
 
         await message.reply("𝒀𝒐𝒖𝒓 𝒎𝒆𝒔𝒔𝒂𝒈𝒆 𝒉𝒂𝒔 𝒃𝒆𝒆𝒏 𝒇𝒐𝒓𝒘𝒂𝒓𝒅𝒆𝒅 𝒕𝒐 𝒕𝒉𝒆 𝒂𝒅𝒎𝒊𝒏. 👍")
 
