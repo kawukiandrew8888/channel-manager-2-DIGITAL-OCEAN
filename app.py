@@ -58,7 +58,7 @@ async def start(client: Client, message: Message):
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("Accept User", callback_data=f"accept_{user_id}")],
             [InlineKeyboardButton("Reject User", callback_data=f"reject_{user_id}")]
-        )
+        ])
     )
 
     await message.reply("𝐘𝐨𝐮𝐫 𝐫𝐞𝐪𝐮𝐞𝐬𝐭 𝐡𝐚𝐬 𝐛𝐞𝐞𝐧 𝐬𝐞𝐧𝐭 𝐭𝐨 𝐋-𝐅𝐋𝐈𝐗 𝐀𝐃𝐌𝐈𝐍, 𝐚𝐧𝐝 𝐩𝐥𝐞𝐚𝐬𝐞 𝐰𝐚𝐢𝐭 𝐟𝐨𝐫 𝐚𝐩𝐩𝐫𝐨𝐯𝐚𝐥.\n\n 𝐓𝐡𝐚𝐧𝐤 𝐲𝐨𝐮 🤝🤝")
