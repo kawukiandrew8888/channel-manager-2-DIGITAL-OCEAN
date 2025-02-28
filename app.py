@@ -1,4 +1,3 @@
-from flask import Flask, Response
 import os
 import asyncio
 from datetime import datetime, timedelta
@@ -7,17 +6,10 @@ from pyrogram import Client, filters
 from pyrogram.types import InlineKeyboardButton, InlineKeyboardMarkup, Message, CallbackQuery
 from pyrogram.errors import UserIsBlocked
 from pymongo import MongoClient
+from aiohttp import web
 
 # Load environment variables
 load_dotenv()
-
-# Initialize Flask app
-flask_app = Flask(__name__)
-
-# Health check endpoint
-@flask_app.route('/health')
-def health_check():
-    return Response("OK", status=200)
 
 # Initialize MongoDB client
 mongo_client = MongoClient(os.getenv("MONGO_URI"))
@@ -44,6 +36,14 @@ app = Client(
 
 # Admin ID
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
+
+# Health check endpoint
+async def health_check(request):
+    return web.Response(text="OK", status=200)
+
+# Initialize aiohttp app
+aiohttp_app = web.Application()
+aiohttp_app.router.add_get('/health', health_check)
 
 # Command to start the bot
 @app.on_message(filters.command("start") & filters.private)
@@ -305,23 +305,22 @@ async def admin_reply(client: Client, message: Message):
         await message.reply("⚠️ No linked user found for this message.")
 
 # Server initialization
-if __name__ == "__main__":
-    # Start Flask server in separate thread
-    from threading import Thread
-    flask_thread = Thread(target=lambda: flask_app.run(host='0.0.0.0', port=8000))
-    flask_thread.daemon = True
-    flask_thread.start()
+async def start_bot():
+    await app.start()
+    await web._run_app(aiohttp_app, host='0.0.0.0', port=8000)
 
-    # Start Pyrogram client
-    app.start()
-    
+async def main():
     # Start background tasks
     loop = asyncio.get_event_loop()
     loop.create_task(check_and_remove_users())
     loop.create_task(revoke_expired_invites())
 
+    # Start the bot and the aiohttp server
+    await start_bot()
+
+if __name__ == "__main__":
     try:
-        loop.run_forever()
+        asyncio.run(main())
     except KeyboardInterrupt:
         pass
     finally:
